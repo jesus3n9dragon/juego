@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Tetris Pro</title>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial;
+}
+
+body{
+background:#0f172a;
+color:white;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+
+.container{
+display:flex;
+gap:30px;
+}
+
+canvas{
+background:#111827;
+border:4px solid #00d4ff;
+border-radius:12px;
+}
+
+.panel{
+width:250px;
+}
+
+.card{
+background:#1e293b;
+padding:20px;
+margin-bottom:15px;
+border-radius:10px;
+}
+
+h1{
+margin-bottom:20px;
+color:#00d4ff;
+}
+
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+background:#00d4ff;
+font-size:18px;
+}
+
+button:hover{
+background:#00a8cc;
+}
+
+kbd{
+background:#333;
+padding:3px 7px;
+border-radius:5px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<canvas id="game"></canvas>
+
+<div class="panel">
+
+<h1>TETRIS</h1>
+
+<div class="card">
+<p>Puntos: <span id="score">0</span></p>
+<p>Nivel: <span id="level">1</span></p>
+<p>Líneas: <span id="lines">0</span></p>
+</div>
+
+<div class="card">
+<h3>Siguiente</h3>
+<canvas id="next"></canvas>
+</div>
+
+<div class="card">
+<p>← → mover</p>
+<p>↑ rotar</p>
+<p>↓ rápido</p>
+<p>ESPACIO caer</p>
+<p>P pausa</p>
+</div>
+
+<button onclick="restart()">
+Reiniciar
+</button>
+
+</div>
+
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const next=document.getElementById("next");
+const nctx=next.getContext("2d");
+
+const BLOCK=30;
+const COLS=10;
+const ROWS=20;
+
+canvas.width=COLS*BLOCK;
+canvas.height=ROWS*BLOCK;
+
+next.width=120;
+next.height=120;
+
+const colors=[
+null,
+"#00ffff",
+"#ffff00",
+"#8000ff",
+"#00ff00",
+"#ff0000",
+"#0000ff",
+"#ff9900"
+];
+
+const pieces=[
+
+[],
+[[1,1,1,1]],
+
+[
+[2,2],
+[2,2]
+],
+
+[
+[0,3,0],
+[3,3,3]
+],
+
+[
+[0,4,4],
+[4,4,0]
+],
+
+[
+[5,5,0],
+[0,5,5]
+],
+
+[
+[6,0,0],
+[6,6,6]
+],
+
+[
+[0,0,7],
+[7,7,7]
+]
+
+];
+
+let board;
+let score=0;
+let lines=0;
+let level=1;
+let paused=false;
+
+function createBoard(){
+return Array.from(
+{length:ROWS},
+()=>Array(COLS).fill(0)
+);
+}
+
+function randomPiece(){
+
+const type=
+Math.floor(Math.random()*7)+1;
+
+return{
+shape:pieces[type],
+color:type,
+x:3,
+y:0
+};
+
+}
+
+let player=randomPiece();
+let nextPiece=randomPiece();
+
+function drawBlock(x,y,color){
+
+ctx.fillStyle=colors[color];
+
+ctx.fillRect(
+x*BLOCK,
+y*BLOCK,
+BLOCK,
+BLOCK
+);
+
+ctx.strokeStyle="#000";
+
+ctx.strokeRect(
+x*BLOCK,
+y*BLOCK,
+BLOCK,
+BLOCK
+);
+
+}
+
+function draw(){
+
+ctx.fillStyle="#111827";
+
+ctx.fillRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
+
+board.forEach((r,y)=>
+r.forEach((v,x)=>{
+if(v)
+drawBlock(x,y,v)
+})
+);
+
+player.shape.forEach((r,y)=>
+r.forEach((v,x)=>{
+
+if(v){
+
+drawBlock(
+player.x+x,
+player.y+y,
+player.color
+);
+
+}
+
+})
+);
+
+}
+
+function collide(){
+
+for(
+let y=0;
+y<player.shape.length;
+y++
+){
+
+for(
+let x=0;
+x<player.shape[y].length;
+x++
+){
+
+if(
+player.shape[y][x]
+&&(
+board[
+player.y+y
+]?.[
+player.x+x
+]!==0
+)
+){
+
+return true;
+
+}
+
+}
+
+}
+
+return false;
+
+}
+
+function merge(){
+
+player.shape.forEach(
+(r,y)=>{
+
+r.forEach(
+(v,x)=>{
+
+if(v){
+
+board[
+player.y+y
+][
+player.x+x
+]=player.color;
+
+}
+
+});
+
+});
+
+}
+
+function rotate(){
+
+const s=
+player.shape.map(
+r=>[...r]
+);
+
+for(
+let y=0;
+y<s.length;
+y++
+){
+
+for(
+let x=0;
+x<y;
+x++
+){
+
+[
+s[x][y],
+s[y][x]
+
+]=[
+
+s[y][x],
+s[x][y]
+
+];
+
+}
+
+}
+
+s.forEach(
+r=>r.reverse()
+);
+
+const old=
+player.shape;
+
+player.shape=s;
+
+if(
+collide()
+)
+player.shape=old;
+
+}
+
+function clearLines(){
+
+let count=0;
+
+outer:
+for(
+let y=
+ROWS-1;
+y>=0;
+y--
+){
+
+for(
+let x=0;
+x<COLS;
+x++
+){
+
+if(
+board[y][x]===0
+)
+continue outer;
+
+}
+
+board.splice(
+y,
+1
+);
+
+board.unshift(
+Array(COLS)
+.fill(0)
+);
+
+count++;
+
+y++;
+
+}
+
+if(count){
+
+lines+=count;
+
+score+=
+[0,100,300,500,800]
+[count]
+*
+level;
+
+level=
+Math.floor(
+lines/10
+)+1;
+
+update();
+
+}
+
+}
+
+function spawn(){
+
+player=
+nextPiece;
+
+nextPiece=
+randomPiece();
+
+player.x=3;
+
+player.y=0;
+
+drawNext();
+
+if(
+collide()
+){
+
+alert(
+"GAME OVER"
+);
+
+restart();
+
+}
+
+}
+
+function drop(){
+
+player.y++;
+
+if(
+collide()
+){
+
+player.y--;
+
+merge();
+
+clearLines();
+
+spawn();
+
+}
+
+timer=0;
+
+}
+
+function move(dir){
+
+player.x+=dir;
+
+if(
+collide()
+)
+player.x-=dir;
+
+}
+
+function hardDrop(){
+
+while(
+!collide()
+)
+player.y++;
+
+player.y--;
+
+merge();
+
+clearLines();
+
+spawn();
+
+}
+
+function drawNext(){
+
+nctx.clearRect(
+0,
+0,
+120,
+120
+);
+
+nextPiece.shape.forEach(
+(r,y)=>{
+
+r.forEach(
+(v,x)=>{
+
+if(v){
+
+nctx.fillStyle=
+colors[
+nextPiece.color
+];
+
+nctx.fillRect(
+x*25+20,
+y*25+20,
+25,
+25
+);
+
+}
+
+});
+
+});
+
+}
+
+function update(){
+
+document.getElementById(
+"score"
+).innerText=score;
+
+document.getElementById(
+"level"
+).innerText=level;
+
+document.getElementById(
+"lines"
+).innerText=lines;
+
+}
+
+let timer=0;
+let last=0;
+
+function game(time=0){
+
+if(!paused){
+
+const delta=
+time-last;
+
+last=time;
+
+timer+=delta;
+
+if(
+timer>
+1000-
+(
+level*60
+)
+)
+drop();
+
+draw();
+
+}
+
+requestAnimationFrame(
+game
+);
+
+}
+
+document.addEventListener(
+"keydown",
+e=>{
+
+if(
+e.key==="ArrowLeft"
+)
+move(-1);
+
+if(
+e.key==="ArrowRight"
+)
+move(1);
+
+if(
+e.key==="ArrowDown"
+)
+drop();
+
+if(
+e.key==="ArrowUp"
+)
+rotate();
+
+if(
+e.code==="Space"
+)
+hardDrop();
+
+if(
+e.key==="p"
+||
+e.key==="P"
+)
+paused=
+!paused;
+
+draw();
+
+}
+);
+
+function restart(){
+
+board=
+createBoard();
+
+score=0;
+
+lines=0;
+
+level=1;
+
+player=
+randomPiece();
+
+nextPiece=
+randomPiece();
+
+paused=false;
+
+update();
+
+drawNext();
+
+}
+
+restart();
+
+game();
+
+</script>
+
+</body>
+</html>
